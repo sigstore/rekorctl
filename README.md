@@ -14,3 +14,8 @@ useful to anyone wanting to interact with a rekor instance, beyond just making a
   help        Help about any command
   update      Rekor update command
 ```
+
+## Security
+
+Should you discover any security issues, please refer to sigstores [security
+process](https://github.com/sigstore/community/blob/main/SECURITY.md)
