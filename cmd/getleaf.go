@@ -1,18 +1,17 @@
-/*
-Copyright © 2020 Luke Hinds <lhinds@redhat.com>
+// Copyright 2021 The Sigstore Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package cmd
 
 import (
@@ -30,10 +29,11 @@ import (
 	"github.com/google/trillian"
 	tclient "github.com/google/trillian/client"
 	tcrypto "github.com/google/trillian/crypto"
-	"github.com/google/trillian/merkle/rfc6962"
-	"github.com/projectrekor/rekor-cli/log"
+	"github.com/google/trillian/merkle/rfc6962/hasher"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/sigstore/rekor/pkg/log"
 )
 
 type getLeafResponse struct {
@@ -96,7 +96,7 @@ var getleafCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		verifier := tclient.NewLogVerifier(rfc6962.DefaultHasher, pub, crypto.SHA256)
+		verifier := tclient.NewLogVerifier(hasher.DefaultHasher, pub, crypto.SHA256)
 		_, err = tcrypto.VerifySignedLogRoot(verifier.PubKey, verifier.SigHash, resp.Leaf.SignedLogRoot)
 
 		if err != nil {
@@ -105,7 +105,8 @@ var getleafCmd = &cobra.Command{
 
 		fileContent := resp.Leaf.Leaves[0].LeafValue
 
-		err = ioutil.WriteFile(outfile, fileContent, 0644)
+		// TODO: check the file permission if can be 0600
+		err = ioutil.WriteFile(outfile, fileContent, 0644) //nolint: gosec
 		if err != nil {
 			log.Fatal(err)
 		}

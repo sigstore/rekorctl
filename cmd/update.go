@@ -1,18 +1,17 @@
-/*
-Copyright © 2020 Luke Hinds <lhinds@redhat.com>
+// Copyright 2021 The Sigstore Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package cmd
 
 import (
@@ -27,24 +26,21 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mitchellh/go-homedir"
-
+	"github.com/google/trillian"
+	tclient "github.com/google/trillian/client"
 	tcrypto "github.com/google/trillian/crypto"
+	"github.com/google/trillian/merkle/logverifier"
+	"github.com/google/trillian/merkle/rfc6962/hasher"
+	"github.com/mitchellh/go-homedir"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
-	tclient "github.com/google/trillian/client"
-
-	"github.com/google/trillian"
-	"github.com/google/trillian/merkle"
-	"github.com/google/trillian/merkle/rfc6962"
-	"github.com/projectrekor/rekor-cli/log"
-	"github.com/spf13/viper"
-
-	"github.com/spf13/cobra"
+	"github.com/sigstore/rekor/pkg/log"
 )
 
 type RespStatusCode struct {
-	Code string `json:"file_recieved"`
+	Code string `json:"file_received"`
 }
 
 type latestResponse struct {
@@ -84,17 +80,18 @@ func getPreviousState(log *zap.SugaredLogger) *state {
 		if os.IsNotExist(err) {
 			log.Info("No previous state found at: ", p)
 			return nil
-		} else {
-			// Capture any other errors
-			log.Error(err)
-			return nil
 		}
+
+		// Capture any other errors
+		log.Error(err)
+		return nil
 	}
 
 	if err := json.Unmarshal(f, &oldState); err != nil {
 		log.Info(err)
 		return nil
 	}
+
 	return &oldState
 }
 
@@ -112,6 +109,8 @@ func setState(size int64, hash []byte) error {
 	if err != nil {
 		return nil
 	}
+	// TODO: check the file permission if can be 0600
+	// nolint: gosec
 	if err := ioutil.WriteFile(p, b, 0644); err != nil {
 		return err
 	}
@@ -167,7 +166,7 @@ var updateCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		verifier := tclient.NewLogVerifier(rfc6962.DefaultHasher, pub, crypto.SHA256)
+		verifier := tclient.NewLogVerifier(hasher.DefaultHasher, pub, crypto.SHA256)
 		root, err := tcrypto.VerifySignedLogRoot(verifier.PubKey, verifier.SigHash, resp.Proof.SignedLogRoot)
 		if err != nil {
 			log.Fatal(err)
@@ -180,7 +179,7 @@ var updateCmd = &cobra.Command{
 		}
 		// Only do the check if we sent an old one.
 		if oldState != nil {
-			v := merkle.NewLogVerifier(rfc6962.DefaultHasher)
+			v := logverifier.New(hasher.DefaultHasher)
 			if err := v.VerifyConsistencyProof(oldState.Size, newSize, oldState.Hash, root.RootHash, resp.Proof.Proof.Hashes); err != nil {
 				log.Fatal(err)
 			}
@@ -189,6 +188,7 @@ var updateCmd = &cobra.Command{
 		if err := setState(newSize, root.RootHash); err != nil {
 			log.Fatal(err)
 		}
+
 		log.Info("State updated")
 	},
 }
